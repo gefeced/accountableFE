@@ -226,16 +226,40 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Pocket Tools */}
+        <div>
+          <h2 className="text-2xl font-bold mb-4">Pocket Accountable Tools</h2>
+          <motion.div
+            whileHover={isPlayful ? { scale: 1.02 } : {}}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => navigate('/tools')}
+            className={`bg-card p-8 border cursor-pointer ${isPlayful ? 'playful-border playful-shadow rounded-[1.5rem]' : 'clean-border clean-shadow rounded-lg'} text-center hover:bg-secondary/50 transition-colors`}
+            data-testid="pocket-tools"
+          >
+            <div className="text-5xl mb-4">🛠️</div>
+            <h3 className="text-xl font-bold mb-2">Calendar & Calculator</h3>
+            <p className="text-muted-foreground">
+              Plan your schedule and use handy tools!
+            </p>
+          </motion.div>
+        </div>
+
         {/* Pocket Games */}
         <div>
           <h2 className="text-2xl font-bold mb-4">Pocket Games</h2>
-          <div className={`bg-card p-8 border ${isPlayful ? 'playful-border playful-shadow rounded-[1.5rem]' : 'clean-border clean-shadow rounded-lg'} text-center`}>
+          <motion.div
+            whileHover={isPlayful ? { scale: 1.02 } : {}}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => navigate('/games')}
+            className={`bg-card p-8 border cursor-pointer ${isPlayful ? 'playful-border playful-shadow rounded-[1.5rem]' : 'clean-border clean-shadow rounded-lg'} text-center hover:bg-secondary/50 transition-colors`}
+            data-testid="pocket-games"
+          >
             <div className="text-5xl mb-4">🎮</div>
-            <h3 className="text-xl font-bold mb-2">Coming Soon</h3>
+            <h3 className="text-xl font-bold mb-2">Chess, Tic-Tac-Toe & More</h3>
             <p className="text-muted-foreground">
-              Fun mini-games to earn extra XP and coins will be available here soon!
+              Play fun mini-games to earn coins!
             </p>
-          </div>
+          </motion.div>
         </div>
       </div>
     </div>

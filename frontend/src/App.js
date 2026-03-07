@@ -15,6 +15,8 @@ import Leaderboard from '@/pages/Leaderboard';
 import Groups from '@/pages/Groups';
 import Settings from '@/pages/Settings';
 import Achievements from '@/pages/Achievements';
+import PocketGames from '@/pages/PocketGames';
+import PocketTools from '@/pages/PocketTools';
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -87,6 +89,22 @@ function AppContent() {
             element={
               <ProtectedRoute>
                 <Achievements />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/games"
+            element={
+              <ProtectedRoute>
+                <PocketGames />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tools"
+            element={
+              <ProtectedRoute>
+                <PocketTools />
               </ProtectedRoute>
             }
           />
