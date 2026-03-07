@@ -197,6 +197,8 @@ async def check_achievements(user: User) -> List[str]:
         {"id": "streak_30", "name": "Month Master", "check": lambda u: u.streak >= 30},
         {"id": "all_sectors", "name": "Renaissance", "check": lambda u: all([getattr(u, f"{s}_xp") > 0 for s in SECTORS])},
         {"id": "rich", "name": "Wealthy", "check": lambda u: u.coins >= 1000},
+        {"id": "first_pet", "name": "Pet Owner", "check": lambda u: len(u.pets_owned) > 0},
+        {"id": "music_lover", "name": "Music Lover", "check": lambda u: u.music_player_owned},
     ]
     
     for ach in achievements_def:
@@ -438,7 +440,17 @@ async def purchase_item(purchase: PurchaseRequest, current_user: User = Depends(
     }
     await db.user_inventory.insert_one(inventory_doc)
     
-    return {"success": True, "item": item}
+    # Check for new achievements after purchase
+    updated_user = await db.users.find_one({"id": current_user.id}, {"_id": 0, "password": 0})
+    new_achievements = await check_achievements(User(**updated_user))
+    
+    if new_achievements:
+        await db.users.update_one(
+            {"id": current_user.id},
+            {"$push": {"achievements": {"$each": new_achievements}}}
+        )
+    
+    return {"success": True, "item": item, "new_achievements": new_achievements}
 
 PREVIEW_COST = 10  # Coins
 PREVIEW_DURATION_SECONDS = 150  # 2.5 minutes
@@ -541,12 +553,59 @@ async def get_achievements(current_user: User = Depends(get_current_user)):
         {"id": "streak_30", "name": "Month Master", "description": "Maintain a 30-day streak", "icon": "👑"},
         {"id": "all_sectors", "name": "Renaissance", "description": "Try all sectors", "icon": "🎨"},
         {"id": "rich", "name": "Wealthy", "description": "Earn 1000+ coins", "icon": "💰"},
+        {"id": "first_pet", "name": "Pet Owner", "description": "Purchase your first pet", "icon": "🐾"},
+        {"id": "music_lover", "name": "Music Lover", "description": "Purchase the music player", "icon": "🎵"},
     ]
     
     return {
         "unlocked": current_user.achievements,
         "all": all_achievements
     }
+
+# Pet interaction endpoint
+@api_router.post("/pets/interact")
+async def interact_with_pet(pet_data: dict, current_user: User = Depends(get_current_user)):
+    """Award XP bonus when user clicks on their pet"""
+    pet_id = pet_data.get("pet_id")
+    
+    if not pet_id:
+        raise HTTPException(status_code=400, detail="Pet ID required")
+    
+    if pet_id not in current_user.pets_owned:
+        raise HTTPException(status_code=400, detail="You don't own this pet")
+    
+    # Award 5 XP bonus
+    bonus_xp = 5
+    new_accountable_xp = current_user.accountable_xp + bonus_xp
+    new_accountable_level = calculate_level(new_accountable_xp)
+    
+    await db.users.update_one(
+        {"id": current_user.id},
+        {"$set": {
+            "accountable_xp": new_accountable_xp,
+            "accountable_level": new_accountable_level
+        }}
+    )
+    
+    return {
+        "success": True,
+        "xp_awarded": bonus_xp,
+        "new_total_xp": new_accountable_xp,
+        "new_level": new_accountable_level
+    }
+
+# Get user's owned pets with details
+@api_router.get("/pets/owned")
+async def get_owned_pets(current_user: User = Depends(get_current_user)):
+    """Get list of pets owned by user with their details"""
+    owned_pets = []
+    
+    for pet_id in current_user.pets_owned:
+        pet_item = await db.shop_items.find_one({"id": pet_id}, {"_id": 0})
+        if pet_item:
+            owned_pets.append(pet_item)
+    
+    return {"pets": owned_pets}
 
 # Group routes (keeping existing)
 @api_router.post("/groups/create", response_model=Group)

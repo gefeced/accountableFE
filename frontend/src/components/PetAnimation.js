@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import axios from 'axios';
+import confetti from 'canvas-confetti';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -10,38 +11,32 @@ const API = `${BACKEND_URL}/api`;
 const PET_CONFIGS = {
   'Mop Pet': {
     emoji: '🧹',
-    message: 'Mop is cleaning up! +5 XP',
-    xpBonus: 5,
+    message: 'Mop is cleaning up!',
     animation: 'bounce'
   },
   'Dumbbell Pet': {
     emoji: '🏋️',
-    message: 'Dumbbell motivates you! +5 XP',
-    xpBonus: 5,
+    message: 'Dumbbell motivates you!',
     animation: 'pulse'
   },
   'Book Pet': {
     emoji: '📖',
-    message: 'Book shares wisdom! +5 XP',
-    xpBonus: 5,
+    message: 'Book shares wisdom!',
     animation: 'float'
   },
   'Zen Stone Pet': {
     emoji: '🪨',
-    message: 'Zen Stone brings peace! +5 XP',
-    xpBonus: 5,
+    message: 'Zen Stone brings peace!',
     animation: 'spin'
   },
   'Dove Pet': {
     emoji: '🕊️',
-    message: 'Dove blesses you! +5 XP',
-    xpBonus: 5,
+    message: 'Dove blesses you!',
     animation: 'fly'
   },
   'Chef Hat Pet': {
     emoji: '👨‍🍳',
-    message: 'Chef inspires you! +5 XP',
-    xpBonus: 5,
+    message: 'Chef inspires you!',
     animation: 'bounce'
   }
 };
@@ -49,50 +44,106 @@ const PET_CONFIGS = {
 export default function PetAnimation() {
   const { user, token, refreshUser } = useAuth();
   const [activePet, setActivePet] = useState(null);
+  const [activePetId, setActivePetId] = useState(null);
   const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [ownedPets, setOwnedPets] = useState([]);
+  const timeoutRef = useRef(null);
 
+  // Fetch owned pets with details
   useEffect(() => {
-    if (!user || !user.pets_owned || user.pets_owned.length === 0) return;
+    if (!user || !token || !user.pets_owned || user.pets_owned.length === 0) return;
 
-    // Show pet randomly every 2-5 minutes
-    const showPet = () => {
-      const randomDelay = Math.random() * 180000 + 120000; // 2-5 minutes
-      setTimeout(() => {
-        const randomX = Math.random() * (window.innerWidth - 200);
-        const randomY = Math.random() * (window.innerHeight - 200);
-        setPosition({ x: randomX, y: randomY });
-        
-        // Pick a random owned pet
-        // For demo, we'll use the first pet config
-        const petKey = Object.keys(PET_CONFIGS)[0];
-        setActivePet(petKey);
-        
-        // Hide after 5 seconds
-        setTimeout(() => {
-          setActivePet(null);
-        }, 5000);
-        
-        showPet(); // Schedule next appearance
-      }, randomDelay);
+    const fetchOwnedPets = async () => {
+      try {
+        const response = await axios.get(`${API}/pets/owned`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setOwnedPets(response.data.pets || []);
+      } catch (error) {
+        console.error('Failed to fetch owned pets:', error);
+      }
     };
 
-    showPet();
-  }, [user]);
+    fetchOwnedPets();
+  }, [user, token]);
+
+  // Show pet randomly
+  const schedulePetAppearance = useCallback(() => {
+    if (ownedPets.length === 0) return;
+
+    const randomDelay = Math.random() * 120000 + 60000; // 1-3 minutes
+    
+    timeoutRef.current = setTimeout(() => {
+      // Pick a random owned pet
+      const randomPet = ownedPets[Math.floor(Math.random() * ownedPets.length)];
+      const petConfig = Object.entries(PET_CONFIGS).find(([name]) => 
+        randomPet.name.includes(name.split(' ')[0]) || name.includes(randomPet.name.split(' ')[0])
+      );
+      
+      if (petConfig) {
+        const randomX = Math.max(100, Math.min(window.innerWidth - 200, Math.random() * window.innerWidth));
+        const randomY = Math.max(100, Math.min(window.innerHeight - 200, Math.random() * window.innerHeight));
+        
+        setPosition({ x: randomX, y: randomY });
+        setActivePet(petConfig[0]);
+        setActivePetId(randomPet.id);
+        
+        // Hide after 8 seconds if not clicked
+        setTimeout(() => {
+          setActivePet(null);
+          setActivePetId(null);
+        }, 8000);
+      }
+      
+      schedulePetAppearance();
+    }, randomDelay);
+  }, [ownedPets]);
+
+  useEffect(() => {
+    if (ownedPets.length > 0) {
+      schedulePetAppearance();
+    }
+    
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, [ownedPets, schedulePetAppearance]);
 
   const handlePetClick = async () => {
-    if (!activePet || !user) return;
+    if (!activePet || !user || !activePetId) return;
 
     const config = PET_CONFIGS[activePet];
-    toast.success(config.message);
     
     try {
-      // Award bonus XP (simplified - just show toast for demo)
-      await refreshUser();
+      const response = await axios.post(
+        `${API}/pets/interact`,
+        { pet_id: activePetId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      if (response.data.success) {
+        // Mini confetti burst
+        confetti({
+          particleCount: 30,
+          spread: 50,
+          origin: { 
+            x: position.x / window.innerWidth, 
+            y: position.y / window.innerHeight 
+          }
+        });
+        
+        toast.success(`${config.message} +${response.data.xp_awarded} XP!`, { duration: 3000 });
+        await refreshUser();
+      }
     } catch (error) {
-      console.error('Failed to award pet bonus:', error);
+      toast.error('Pet interaction failed');
+      console.error('Failed to interact with pet:', error);
     }
     
     setActivePet(null);
+    setActivePetId(null);
   };
 
   const getAnimation = (type) => {
